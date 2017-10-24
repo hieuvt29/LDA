@@ -8,7 +8,14 @@ import pickle
 import time
 
 class LDA(object):
-    def __init__(self, K = 1, V = 1, alpha = 0.1, beta = None, docs = None, method=None, run_em=False, em_iters = 0, doc_iters = 0, em_converge = 1e-4, doc_converge = 1e-6):
+    def __init__(self, K = 1, V = 1, alpha = 0.1, beta = None, docs = None, method=None, loops=None, run_em=False, em_iters = 0, doc_iters = 0, em_converge = 1e-4, doc_converge = 1e-6):
+        """
+        K - number of topics
+        V - number of distint terms in corpus
+        method  
+            random: random will initialize beta randomly based on data , data is required
+            loaded: load from file, loops is required to specify which version we want to load
+        """
         self.alpha = alpha
         self.beta = beta
         self.docs = docs
@@ -17,11 +24,11 @@ class LDA(object):
         self.em_converge = em_converge
         self.doc_converge = doc_converge
 
-        if method == "seeded":
+        if method == "random":
             self.initBeta()
             
         if method == "loaded":
-            self.load()
+            self.load(loops)
 
         if run_em:
             self.em_alg(em_iters = em_iters, doc_iters = doc_iters)
@@ -42,9 +49,6 @@ class LDA(object):
 
         self.beta = self.beta / np.sum(self.beta, axis=1).reshape(self.K, 1)
 
-        pass
-
-    
 
     def em_alg(self, em_iters = 10, doc_iters = 10):
         self.gamma = np.zeros((len(self.docs), self.K))
@@ -112,7 +116,7 @@ class LDA(object):
             else:
                 old_doc_lb = doc_lb
                 i += 1
-        print("{} iterations, lowerbound: {}".format(i, doc_lb))
+        # print("{} iterations, lowerbound: {}".format(i, doc_lb))
 
         return doc_lb, phi, gamma
 
@@ -135,33 +139,16 @@ class LDA(object):
         # a = raw_input()
         return l
 
-    def lowerbound(self):
-        l = 0
-        for d in range(len(self.docs)):
-            sub_digamma = digamma(self.gamma[d]) - digamma(np.sum(self.gamma[d])) # (K, ) - (,) = (K, )
-            l1 = (self.alpha - 1) * np.sum(sub_digamma) # float 
-            l2 = np.sum(self.phi[d].dot(sub_digamma)) # (Nd, K) * (K,) = (Nd,)
-            l3 = np.sum(self.phi[d].T.dot(self.indicators[d].toarray()) * np.log(self.beta)) # (Nd, K).T x (Nd, V) = (K, V)
-            l4 = - gammaln(np.sum(self.gamma[d])) + np.sum(gammaln(self.gamma[d])) - (self.gamma[d] - 1).T.dot(sub_digamma)
-            # (K, ).T x (K, ) - (K,1) + (K, ).T x (K, ) = (1,1)
-            l5 = - np.sum(self.phi[d] * np.log(self.phi[d])) # (Nd, K) * (Nd, K) = (Nd, K)
-            
-            # print("{} - l2: {}, l3: {}, l4: {}, l5: {}, l6: {}, l7: {}".format(d, l2, l3, l4, l5, l6, l7))
-            l += l1 + l2 + l3 + l4 + l5
-            # print("L1: {}, l2: {}, l3: {}, l4: {}, l5: {}".format(l1,l2,l3,l4,l5))
-
-        return l
-
     def save(self, state):
         savedir = os.path.dirname(os.path.realpath(__file__)) + '/generated_files'
         pickle.dump(self.gamma, open(savedir + '/gamma-' + state + '.K_' + str(self.K) + '.V_' + str(self.V), 'wb'))
         pickle.dump(self.beta, open(savedir + '/beta-' + state + '.K_' + str(self.K) + '.V_' + str(self.V), 'wb'))
         pass
 
-    def load(self):
+    def load(self, loops):
         savedir = os.path.dirname(os.path.realpath(__file__)) + '/generated_files'        
-        self.gamma = pickle.load(open(savedir + '/gamma-final.K_' + str(self.K) + '.V_' + str(self.V), 'rb'))
-        self.beta = pickle.load(open(savedir + '/beta-final.K_' + str(self.K) + '.V_' + str(self.V), 'rb'))
+        self.gamma = pickle.load(open(savedir + '/gamma-'+ str(loops) +'.K_' + str(self.K) + '.V_' + str(self.V), 'rb'))
+        self.beta = pickle.load(open(savedir + '/beta-'+ str(loops) +'.K_' + str(self.K) + '.V_' + str(self.V), 'rb'))
         pass
 
     def print_topics(self, vocab, nwords = 10, verbose=False):
@@ -217,7 +204,7 @@ if __name__ == "__main__":
     em_iters = 100
     doc_iters = 40
     alpha = 0.1
-    ldaModel = LDA(K = K, V = V, alpha = alpha, docs = X, method="seeded", run_em=True, em_iters = em_iters, doc_iters= doc_iters)
+    ldaModel = LDA(K = K, V = V, alpha = alpha, docs = X, method="random", run_em=True, em_iters = em_iters, doc_iters= doc_iters)
 
     vocab = []
     # with open(savedir + '/BoW.data', 'r') as f:
